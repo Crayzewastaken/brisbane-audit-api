@@ -1,74 +1,79 @@
 import os
 import json
 from datetime import datetime
-from flask import Flask, request, jsonify
 from pathlib import Path
+from http.server import BaseHTTPRequestHandler
+from urllib.parse import parse_qs
 
-app = Flask(__name__)
-
-# Configuration
-API_TOKEN = os.environ.get('AUDIT_API_TOKEN', 'dev-token-change-in-production')
 DATA_DIR = Path('/tmp/data')
 DATA_FILE = DATA_DIR / 'audits.json'
+API_TOKEN = os.environ.get('AUDIT_API_TOKEN', 'dev-token')
 
-# Ensure data directory exists
+# Initialize
 DATA_DIR.mkdir(exist_ok=True, parents=True)
-
-# Initialize data file if it doesn't exist
 if not DATA_FILE.exists():
     DATA_FILE.write_text(json.dumps([]))
 
 
-def verify_token(auth_header):
-    """Verify Bearer token."""
-    if not auth_header:
-        return False
-    try:
-        scheme, token = auth_header.split()
-        return scheme.lower() == 'bearer' and token == API_TOKEN
-    except ValueError:
-        return False
+class handler(BaseHTTPRequestHandler):
+    def verify_token(self):
+        auth = self.headers.get('Authorization', '')
+        try:
+            scheme, token = auth.split()
+            return scheme.lower() == 'bearer' and token == API_TOKEN
+        except:
+            return False
 
+    def do_POST(self):
+        if self.path == '/api/audit':
+            if not self.verify_token():
+                self.send_response(401)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': 'Unauthorized'}).encode())
+                return
 
-@app.route('/api/audit', methods=['POST'])
-def append_audit():
-    """Append a new audit record."""
-    auth_header = request.headers.get('Authorization')
-    if not verify_token(auth_header):
-        return jsonify({'error': 'Unauthorized'}), 401
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length)
+            data = json.loads(body)
 
-    data = request.get_json()
-    if not data:
-        return jsonify({'error': 'No data provided'}), 400
+            audits = json.loads(DATA_FILE.read_text())
+            if 'timestamp' not in data:
+                data['timestamp'] = datetime.now().isoformat()
+            audits.append(data)
+            DATA_FILE.write_text(json.dumps(audits, indent=2))
 
-    audits = json.loads(DATA_FILE.read_text())
-    if 'timestamp' not in data:
-        data['timestamp'] = datetime.now().isoformat()
+            self.send_response(201)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'status': 'success'}).encode())
+        else:
+            self.send_response(404)
+            self.end_headers()
 
-    audits.append(data)
-    DATA_FILE.write_text(json.dumps(audits, indent=2))
+    def do_GET(self):
+        if self.path == '/api/audits':
+            if not self.verify_token():
+                self.send_response(401)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': 'Unauthorized'}).encode())
+                return
 
-    return jsonify({'status': 'success', 'message': 'Audit appended'}), 201
+            audits = json.loads(DATA_FILE.read_text())
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(audits).encode())
 
+        elif self.path == '/health' or self.path == '/':
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({'status': 'ok'}).encode())
+        else:
+            self.send_response(404)
+            self.end_headers()
 
-@app.route('/api/audits', methods=['GET'])
-def get_audits():
-    """Get all audits (with token verification)."""
-    auth_header = request.headers.get('Authorization')
-    if not verify_token(auth_header):
-        return jsonify({'error': 'Unauthorized'}), 401
-
-    audits = json.loads(DATA_FILE.read_text())
-    return jsonify(audits), 200
-
-
-@app.route('/health', methods=['GET'])
-def health():
-    """Health check endpoint."""
-    return jsonify({'status': 'ok'}), 200
-
-
-@app.route('/', methods=['GET'])
-def index():
-    """Root endpoint."""
-    return jsonify({'status': 'Brisbane Audit API running'}), 200
+    def log_message(self, format, *args):
+        pass
