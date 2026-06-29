@@ -1,65 +1,132 @@
-// Add this to the end of your "companies-dont-have-websites" routine in Claude Code
-// This sends each audit to the API
+// ============================================
+// ADD THIS TO YOUR ROUTINE
+// ============================================
 
-const API_URL = "https://your-deployed-url.com/api/audit"; // Replace with your deployed URL
-const API_TOKEN = "your-api-token-here"; // Set in your routine environment or .env
+const fs = require('fs');
+const path = require('path');
 
-// For each business in your audit results:
-async function sendAuditToAPI(businessData) {
-  const auditPayload = {
-    // Business info
-    business_name: businessData.business_name,
-    category: businessData.category,
-    phone: businessData.phone,
-    email: businessData.email,
+const API_URL = "https://brisbane-audit-mh2d0vaae-crayzewastakens-projects.vercel.app/api/audit";
+const API_TOKEN = "your-api-token-from-vercel"; // Set in your routine environment
+const PENDING_FILE = path.join(process.env.HOME || process.env.USERPROFILE, 'audits_pending.json');
 
-    // Audit findings
-    package: businessData.package,
-    website_status: businessData.website_status,
-    gbp_status: businessData.gbp_status,
-    social_media_status: businessData.social_media_status,
+// ============================================
+// 1. ADD THIS FOR EACH BUSINESS (in your loop)
+// ============================================
 
-    // Business metrics
-    total_cost: businessData.total_cost, // Cost to build solution for this client
-    total_profit: businessData.total_profit, // Potential profit if secured
-    time_to_build_hours: businessData.time_to_build_hours, // Hours needed
-
-    // Outreach & conversion
-    outreach_status: businessData.outreach_status, // "not_contacted", "contacted", "interested", "negotiating", "secured"
-    securing_probability: businessData.securing_probability, // 0-100 percentage
-    wants_bundle: businessData.wants_bundle, // true/false
-    bundle_details: businessData.bundle_details, // What bundle they're interested in
-
-    // Scoring
-    worth_score: businessData.worth_score, // 1-5 stars, is it worth pursuing?
-    confidence_level: businessData.confidence_level, // 1-5 stars, how confident in this assessment?
-    notes: businessData.notes, // Any other notes
-
-    timestamp: new Date().toISOString()
-  };
-
+function addAuditToPending(businessData) {
   try {
-    const response = await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${API_TOKEN}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(auditPayload)
-    });
+    let pending = [];
 
-    if (response.ok) {
-      console.log(`✓ Sent audit for ${businessData.business_name}`);
-    } else {
-      console.error(`✗ Failed to send audit for ${businessData.business_name}: ${response.status}`);
+    if (fs.existsSync(PENDING_FILE)) {
+      const data = fs.readFileSync(PENDING_FILE, 'utf8');
+      pending = JSON.parse(data);
     }
+
+    const auditPayload = {
+      // Business info
+      business_name: businessData.business_name,
+      category: businessData.category,
+      phone: businessData.phone,
+      email: businessData.email,
+
+      // Audit findings
+      package: businessData.package,
+      website_status: businessData.website_status,
+      gbp_status: businessData.gbp_status,
+      social_media_status: businessData.social_media_status,
+
+      // Business metrics
+      total_cost: businessData.total_cost,
+      total_profit: businessData.total_profit,
+      time_to_build_hours: businessData.time_to_build_hours,
+
+      // Outreach & conversion
+      outreach_status: businessData.outreach_status,
+      securing_probability: businessData.securing_probability,
+      wants_bundle: businessData.wants_bundle,
+      bundle_details: businessData.bundle_details,
+
+      // Scoring
+      worth_score: businessData.worth_score,
+      confidence_level: businessData.confidence_level,
+      notes: businessData.notes,
+
+      timestamp: new Date().toISOString()
+    };
+
+    pending.push(auditPayload);
+    fs.writeFileSync(PENDING_FILE, JSON.stringify(pending, null, 2));
+    console.log(`+ Added to pending: ${businessData.business_name}`);
   } catch (error) {
-    console.error(`Error sending audit: ${error.message}`);
+    console.error(`Error adding to pending: ${error.message}`);
   }
 }
 
-// Example usage:
-// sendAuditToAPI({
+// ============================================
+// 2. ADD THIS AT THE END OF YOUR ROUTINE
+// ============================================
+
+async function syncPendingAudits() {
+  try {
+    if (!fs.existsSync(PENDING_FILE)) {
+      console.log('No pending audits to sync');
+      return { synced: 0, failed: 0 };
+    }
+
+    const pendingData = fs.readFileSync(PENDING_FILE, 'utf8');
+    const pendingAudits = JSON.parse(pendingData);
+
+    if (!Array.isArray(pendingAudits) || pendingAudits.length === 0) {
+      console.log('No pending audits to sync');
+      return { synced: 0, failed: 0 };
+    }
+
+    console.log(`\nSyncing ${pendingAudits.length} pending audits to API...`);
+
+    let synced = 0;
+    let failed = 0;
+
+    for (const audit of pendingAudits) {
+      try {
+        const response = await fetch(API_URL, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${API_TOKEN}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(audit)
+        });
+
+        if (response.ok) {
+          synced++;
+          console.log(`  ✓ ${audit.business_name}`);
+        } else {
+          failed++;
+          console.log(`  ✗ ${audit.business_name} (${response.status})`);
+        }
+      } catch (error) {
+        failed++;
+        console.log(`  ✗ ${audit.business_name} (${error.message})`);
+      }
+    }
+
+    // Clear pending file after syncing
+    fs.writeFileSync(PENDING_FILE, JSON.stringify([]));
+    console.log(`\n✓ Sync complete: ${synced} succeeded, ${failed} failed`);
+
+    return { synced, failed };
+  } catch (error) {
+    console.error(`Fatal sync error: ${error.message}`);
+    return { synced: 0, failed: 0 };
+  }
+}
+
+// ============================================
+// USAGE IN YOUR ROUTINE:
+// ============================================
+
+// For each business you audit, call:
+// addAuditToPending({
 //   business_name: "Ben Clarke Plumbing",
 //   category: "Plumber",
 //   phone: "(07) 3257 4660",
@@ -79,3 +146,7 @@ async function sendAuditToAPI(businessData) {
 //   confidence_level: 4,
 //   notes: "High-value prospect, responsive to initial outreach"
 // });
+
+// At the very end of your routine (after all businesses), call:
+// await syncPendingAudits();
+// This syncs ALL pending audits to the API in one batch.
