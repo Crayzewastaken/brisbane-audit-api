@@ -5,9 +5,5 @@
       "memory": 512,
       "maxDuration": 60
     }
-  },
-  "env": {
-    "AUDIT_API_TOKEN": "@audit_api_token",
-    "FLASK_ENV": "production"
   }
 }
