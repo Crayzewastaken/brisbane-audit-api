@@ -70,6 +70,39 @@ const response = await fetch('YOUR_DEPLOYED_URL/api/audit', {
 
 Audit data is stored in `data/audits.json` as a JSON array. Each routine run appends a new entry.
 
+### Audit Data Fields
+
+**Business Info:**
+- `business_name` - Company name
+- `category` - Industry/business type
+- `phone` - Contact phone
+- `email` - Contact email
+
+**Audit Findings:**
+- `package` - Service package (Package 1/2/3, etc.)
+- `website_status` - Website status assessment
+- `gbp_status` - Google Business Profile status
+- `social_media_status` - Social media presence assessment
+
+**Business Metrics:**
+- `total_cost` - Cost to build solution (number, $)
+- `total_profit` - Potential profit if secured (number, $)
+- `time_to_build_hours` - Hours needed to implement (number)
+
+**Outreach & Conversion:**
+- `outreach_status` - Status: "not_contacted", "contacted", "interested", "negotiating", "secured"
+- `securing_probability` - Likelihood of closing deal (0-100 percentage)
+- `wants_bundle` - Interest in bundle offering (boolean)
+- `bundle_details` - Bundle description if interested (string)
+
+**Scoring:**
+- `worth_score` - Worth pursuing? (1-5 stars)
+- `confidence_level` - Confidence in assessment (1-5 stars)
+- `notes` - Additional notes/comments
+
+**Meta:**
+- `timestamp` - ISO timestamp when data was sent
+
 ## Bulk Import
 
 To load historical audit data:
