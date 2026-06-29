@@ -1,9 +1,3 @@
 {
-  "buildCommand": "pip install -r requirements.txt",
-  "functions": {
-    "api/index.py": {
-      "memory": 512,
-      "maxDuration": 60
-    }
-  }
+  "buildCommand": "pip install -r requirements.txt"
 }
