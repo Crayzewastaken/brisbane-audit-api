@@ -8,11 +8,11 @@ app = Flask(__name__)
 
 # Configuration
 API_TOKEN = os.environ.get('AUDIT_API_TOKEN', 'dev-token-change-in-production')
-DATA_DIR = Path('/tmp/data')  # Use /tmp for Vercel's ephemeral filesystem
+DATA_DIR = Path('/tmp/data')
 DATA_FILE = DATA_DIR / 'audits.json'
 
 # Ensure data directory exists
-DATA_DIR.mkdir(exist_ok=True)
+DATA_DIR.mkdir(exist_ok=True, parents=True)
 
 # Initialize data file if it doesn't exist
 if not DATA_FILE.exists():
@@ -33,7 +33,6 @@ def verify_token(auth_header):
 @app.route('/api/audit', methods=['POST'])
 def append_audit():
     """Append a new audit record."""
-    # Verify token
     auth_header = request.headers.get('Authorization')
     if not verify_token(auth_header):
         return jsonify({'error': 'Unauthorized'}), 401
@@ -42,17 +41,11 @@ def append_audit():
     if not data:
         return jsonify({'error': 'No data provided'}), 400
 
-    # Load existing audits
     audits = json.loads(DATA_FILE.read_text())
-
-    # Add timestamp if not provided
     if 'timestamp' not in data:
         data['timestamp'] = datetime.now().isoformat()
 
-    # Append new audit
     audits.append(data)
-
-    # Save back to file
     DATA_FILE.write_text(json.dumps(audits, indent=2))
 
     return jsonify({'status': 'success', 'message': 'Audit appended'}), 201
@@ -73,3 +66,9 @@ def get_audits():
 def health():
     """Health check endpoint."""
     return jsonify({'status': 'ok'}), 200
+
+
+@app.route('/', methods=['GET'])
+def index():
+    """Root endpoint."""
+    return jsonify({'status': 'Brisbane Audit API running'}), 200
